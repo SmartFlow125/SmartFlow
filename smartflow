@@ -1,0 +1,134 @@
+# Install folium and matplotlib in the Colab environment if not already installed
+!pip install folium matplotlib
+
+import folium
+import random
+import numpy as np
+import matplotlib.pyplot as plt
+import io
+import base64
+
+# Create lists for colors and statuses of the wells
+statuses = ["green"] * 8 + ["yellow"] * 8 + ["red"] * 4
+random.shuffle(statuses)
+
+# Define problems, solutions, and improvement suggestions for yellow wells
+problems_solutions = [
+    ("Sand buildup", "Implement sand control measures"),
+    ("Water cut increase", "Optimize water injection strategy"),
+    ("Pressure drop", "Enhance gas lift operations"),
+    ("Corrosion in piping", "Apply corrosion inhibitors"),
+    ("Pump failure", "Replace or repair pump"),
+]
+
+improvement_suggestions = [
+    "Increase pump speed to 3200 RPM and reduce choke valve size to 1 inch.",
+    "Decrease pump speed to 1500 RPM to reduce fluid turbulence.",
+    "Change choke valve sizing to 2.5 inches to optimize flow.",
+    "Increase pump speed by 200 RPM to enhance oil recovery.",
+    "Reduce choke valve size from 3 inches to 2 inches for better pressure control.",
+]
+
+# Generate data for 20 wells
+wells = []
+for i in range(20):
+    coords = [30 + random.uniform(-1, 1), -100 + random.uniform(-1, 1)]
+    production_rate = round(random.uniform(50, 200), 1)
+    pump_speed = round(random.uniform(1000, 3000), 1)
+    status = statuses[i]
+
+    if status == "red":
+        problem, solution = random.choice(problems_solutions)
+        improvement = None
+    elif status == "yellow":
+        improvement = random.choice(improvement_suggestions)
+        problem, solution = None, None
+    else:  # Green wells
+        problem, solution, improvement = None, None, None
+
+    wells.append({
+        "name": f"Well {i+1}",
+        "coords": coords,
+        "production_rate": production_rate,
+        "pump_speed": pump_speed,
+        "status": status,
+        "problem": problem,
+        "solution": solution,
+        "improvement": improvement
+    })
+
+# Function to generate trend line plots
+def generate_dynamic_trend_plot(well):
+    time = np.arange(1, 11)
+    production_trend = [well['production_rate'] + np.random.normal(0, 10) * i for i in time]
+    pump_speed_trend = [well['pump_speed'] + np.random.normal(0, 50) * i for i in time]
+
+    plt.figure(figsize=(10, 5))
+    plt.plot(time, production_trend, label='Production Rate (bbl/day)', color='blue', marker='o')
+    plt.plot(time, pump_speed_trend, label='Pump Speed (RPM)', color='red', marker='x')
+    plt.title(f'Trend for {well["name"]}')
+    plt.xlabel('Time (Days)')
+    plt.ylabel('Value')
+    plt.legend()
+    plt.grid()
+
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png')
+    plt.close()
+    buf.seek(0)
+    img_str = base64.b64encode(buf.read()).decode('utf-8')
+    return f"data:image/png;base64,{img_str}"
+
+# Initialize the map
+m = folium.Map(location=[30, -100], zoom_start=6)
+
+# Function to count well statuses
+def count_well_statuses(wells):
+    count = {"green": 0, "yellow": 0, "red": 0}
+    for well in wells:
+        count[well["status"]] += 1
+    return count
+
+# Get counts of wells
+well_counts = count_well_statuses(wells)
+
+# Add counts box to the map
+status_counts_html = f"""
+<div style="position: fixed;
+            top: 10px; left: 10px;
+            background: white;
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 0 5px grey;">
+    <h4>Well Status Counts</h4>
+    <p>Green Wells: {well_counts['green']}</p>
+    <p>Yellow Wells: {well_counts['yellow']}</p>
+    <p>Red Wells: {well_counts['red']}</p>
+</div>
+"""
+
+# Add each well as a marker on the map with a popup
+for well in wells:
+    trend_img = generate_dynamic_trend_plot(well)
+
+    color = "green" if well["status"] == "green" else "orange" if well["status"] == "yellow" else "red"
+    popup_text = f"""
+    <strong>{well['name']}</strong><br>
+    Production Rate: {well['production_rate']} bbl/day<br>
+    Pump Speed: {well['pump_speed']} RPM<br>
+    {'Status: No issues<br>' if well["status"] != "red" else f'Problem: {well["problem"]}<br>Solution: {well["solution"]}<br>'}
+    {'Improvement Suggestion: ' + well["improvement"] + '<br>' if well["status"] == "yellow" else ''}
+    <img src='{trend_img}' width='100%' style="cursor:pointer;"/>
+    """
+
+    folium.Marker(
+        location=well["coords"],
+        popup=folium.Popup(popup_text, max_width=300),
+        icon=folium.Icon(color=color, icon="info-sign")
+    ).add_to(m)
+
+# Add the status counts to the map
+m.get_root().html.add_child(folium.Element(status_counts_html))
+
+# Display the map
+m
